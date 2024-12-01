@@ -30,7 +30,7 @@ const App: React.FC = () => {
       setWallet({
         address: account,
         balance,
-        chainId: network.chainId,
+        chainId: Number(network.chainId),
         chainName: network.name || "Unknown Network",
       });
       setError(null); // Clear any previous errors
