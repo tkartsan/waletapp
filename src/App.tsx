@@ -5,7 +5,6 @@ import "./App.css"; // Import CSS file
 interface WalletInfo {
   address: string;
   balance: string;
-  chainId: number;
   chainName: string;
 }
 
@@ -30,7 +29,6 @@ const App: React.FC = () => {
       setWallet({
         address: account,
         balance,
-        chainId: Number(network.chainId),
         chainName: network.name || "Unknown Network",
       });
       setError(null); // Clear any previous errors
