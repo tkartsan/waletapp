@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import axios from "axios";
+import { Pie } from "react-chartjs-2";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import "./App.css";
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface WalletInfo {
   address: string;
@@ -26,7 +30,6 @@ const App: React.FC = () => {
 
   const fetchTokensAndPrices = async (address: string) => {
     try {
-      // Step 1: Fetch ERC-20 tokens
       const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
         {
@@ -34,21 +37,17 @@ const App: React.FC = () => {
             "X-API-Key": moralisApiKey,
           },
           params: {
-            chain: "eth", // Ethereum mainnet
+            chain: "eth",
           },
         }
       );
 
-      console.log("Fetched Tokens:", tokenBalancesResponse.data);
-
-      // Step 2: Filter out tokens starting with "YT " or "PT "
       const filteredTokens = tokenBalancesResponse.data.filter(
         (token: any) =>
           !token.name?.trim().startsWith("YT ") &&
           !token.name?.trim().startsWith("PT ")
       );
 
-      // Step 3: Fetch prices for each token and calculate total
       const tokensWithPrices = await Promise.all(
         filteredTokens.map(async (token: any) => {
           try {
@@ -63,7 +62,7 @@ const App: React.FC = () => {
 
             const price = priceResponse.data.usdPrice || 0;
             const balance = parseFloat(token.balance) / 10 ** token.decimals;
-            const total = balance * price; // Calculate total locally
+            const total = balance * price;
 
             return {
               name: token.name || "Unknown",
@@ -73,22 +72,19 @@ const App: React.FC = () => {
               total,
             };
           } catch (priceError) {
-            console.error(`Failed to fetch price for ${token.name}:`, priceError);
             return {
               name: token.name || "Unknown",
               symbol: token.symbol || "N/A",
               balance: (
-                parseFloat(token.balance) /
-                10 ** token.decimals
+                parseFloat(token.balance) / 10 ** token.decimals
               ).toFixed(4),
-              price: 0, // Fallback to 0 if price fetching fails
-              total: 0, // Fallback total
+              price: 0,
+              total: 0,
             };
           }
         })
       );
 
-      // Step 4: Filter out tokens with total < $0.00002
       const filteredTokensByTotal = tokensWithPrices.filter(
         (token) => token.total >= 0.00002
       );
@@ -96,7 +92,6 @@ const App: React.FC = () => {
       setTokens(filteredTokensByTotal);
       setError(null);
     } catch (err: any) {
-      console.error("Error fetching tokens and prices:", err);
       setError("Failed to fetch tokens or prices.");
     }
   };
@@ -120,11 +115,9 @@ const App: React.FC = () => {
         chainName: network.name || "Unknown Network",
       });
 
-      // Fetch tokens and prices once when the wallet is connected
       fetchTokensAndPrices(account);
       setError(null);
     } catch (err: any) {
-      console.error("Error fetching wallet info:", err);
       setError("Failed to fetch wallet info.");
     }
   };
@@ -140,7 +133,6 @@ const App: React.FC = () => {
       const accounts = await provider.send("eth_requestAccounts", []);
       fetchWalletInfo(accounts);
     } catch (err: any) {
-      console.error("Error connecting wallet:", err);
       setError("Failed to connect wallet.");
     }
   };
@@ -149,6 +141,43 @@ const App: React.FC = () => {
     setWallet(null);
     setTokens([]);
     setError(null);
+  };
+
+  const generateChartData = () => {
+    const labels = tokens.map((token) => token.symbol);
+    const data = tokens.map((token) => token.total);
+    const colors = tokens.map(
+      () =>
+        `hsl(${Math.floor(Math.random() * 360)}, 80%, 70%)`
+    );
+
+    return {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: colors,
+          borderColor: "black",
+          borderWidth: 1,
+        },
+      ],
+    };
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: (context: any) =>
+            `$${context.raw.toFixed(2)}`,
+        },
+      },
+      legend: {
+        position: "bottom",
+      },
+    },
   };
 
   return (
@@ -166,19 +195,26 @@ const App: React.FC = () => {
           </p>
 
           <h2>Your Tokens:</h2>
+
           {tokens.length > 0 ? (
-            <ul className="token-list">
-              {tokens.map((token, index) => (
-                <li key={index}>
-                  <strong>{token.name}</strong> ({token.symbol}): {token.balance}
-                  <br />
-                  <strong>Price:</strong> ${token.price.toFixed(7)}
-                  <strong> | Total:</strong> ${token.total.toFixed(5)}
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="chart-container">
+                <Pie data={generateChartData()} options={chartOptions} />
+              </div>
+              <ul className="token-list">
+                {tokens.map((token, index) => (
+                  <li key={index}>
+                    <strong>{token.name}</strong> ({token.symbol}):{" "}
+                    {token.balance}
+                    <br />
+                    <strong>Price:</strong> ${token.price.toFixed(7)}
+                    <strong> | Total:</strong> ${token.total.toFixed(5)}
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
-            <p>Getting your tokens</p>
+            <p>Getting your tokens...</p>
           )}
           <button className="btn disconnect-btn" onClick={disconnectWallet}>
             Disconnect Wallet

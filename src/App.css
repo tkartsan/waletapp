@@ -101,6 +101,15 @@
   font-size: 0.9rem;
 }
 
+.chart-container {
+  margin: 20px auto;
+  height: 300px;
+  width: 300px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
   .container {
