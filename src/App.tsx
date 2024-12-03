@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { ethers } from "ethers";
 import axios from "axios";
 import "./App.css";
@@ -13,6 +13,8 @@ interface TokenInfo {
   name: string;
   symbol: string;
   balance: string;
+  price: number;
+  total: number;
 }
 
 const App: React.FC = () => {
@@ -22,19 +24,10 @@ const App: React.FC = () => {
 
   const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
 
-
-  console.log("Moralis API Key:", moralisApiKey);
-
-
-  // Fetch ERC-20 tokens using Moralis API
-  const fetchTokens = async (address: string) => {
-    if (!moralisApiKey) {
-      setError("Moralis API key is not set.");
-      return;
-    }
-
+  const fetchTokensAndPrices = async (address: string) => {
     try {
-      const response = await axios.get(
+      // Step 1: Fetch ERC-20 tokens
+      const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
         {
           headers: {
@@ -46,20 +39,68 @@ const App: React.FC = () => {
         }
       );
 
-      const tokenData: TokenInfo[] = response.data.map((token: any) => ({
-        name: token.name || "Unknown",
-        symbol: token.symbol || "N/A",
-        balance: (parseFloat(token.balance) / 10 ** token.decimals).toFixed(4), // Adjust balance by decimals
-      }));
+      console.log("Fetched Tokens:", tokenBalancesResponse.data);
 
-      setTokens(tokenData);
+      // Step 2: Filter out tokens starting with "YT " or "PT "
+      const filteredTokens = tokenBalancesResponse.data.filter(
+        (token: any) =>
+          !token.name?.trim().startsWith("YT ") &&
+          !token.name?.trim().startsWith("PT ")
+      );
+
+      // Step 3: Fetch prices for each token and calculate total
+      const tokensWithPrices = await Promise.all(
+        filteredTokens.map(async (token: any) => {
+          try {
+            const priceResponse = await axios.get(
+              `https://deep-index.moralis.io/api/v2/erc20/${token.token_address}/price`,
+              {
+                headers: {
+                  "X-API-Key": moralisApiKey,
+                },
+              }
+            );
+
+            const price = priceResponse.data.usdPrice || 0;
+            const balance = parseFloat(token.balance) / 10 ** token.decimals;
+            const total = balance * price; // Calculate total locally
+
+            return {
+              name: token.name || "Unknown",
+              symbol: token.symbol || "N/A",
+              balance: balance.toFixed(4),
+              price,
+              total,
+            };
+          } catch (priceError) {
+            console.error(`Failed to fetch price for ${token.name}:`, priceError);
+            return {
+              name: token.name || "Unknown",
+              symbol: token.symbol || "N/A",
+              balance: (
+                parseFloat(token.balance) /
+                10 ** token.decimals
+              ).toFixed(4),
+              price: 0, // Fallback to 0 if price fetching fails
+              total: 0, // Fallback total
+            };
+          }
+        })
+      );
+
+      // Step 4: Filter out tokens with total < $0.00002
+      const filteredTokensByTotal = tokensWithPrices.filter(
+        (token) => token.total >= 0.00002
+      );
+
+      setTokens(filteredTokensByTotal);
       setError(null);
     } catch (err: any) {
-      setError(err.message || "Failed to fetch tokens");
+      console.error("Error fetching tokens and prices:", err);
+      setError("Failed to fetch tokens or prices.");
     }
   };
 
-  // Fetch wallet info
   const fetchWalletInfo = async (accounts: string[]) => {
     if (accounts.length === 0) {
       setWallet(null);
@@ -79,14 +120,15 @@ const App: React.FC = () => {
         chainName: network.name || "Unknown Network",
       });
 
-      fetchTokens(account); // Fetch tokens after wallet info
+      // Fetch tokens and prices once when the wallet is connected
+      fetchTokensAndPrices(account);
       setError(null);
     } catch (err: any) {
-      setError(err.message || "Failed to fetch wallet info");
+      console.error("Error fetching wallet info:", err);
+      setError("Failed to fetch wallet info.");
     }
   };
 
-  // Connect wallet
   const connectWallet = async () => {
     if (!window.ethereum) {
       setError("MetaMask is not installed!");
@@ -98,14 +140,21 @@ const App: React.FC = () => {
       const accounts = await provider.send("eth_requestAccounts", []);
       fetchWalletInfo(accounts);
     } catch (err: any) {
-      setError(err.message || "Failed to connect wallet");
+      console.error("Error connecting wallet:", err);
+      setError("Failed to connect wallet.");
     }
+  };
+
+  const disconnectWallet = () => {
+    setWallet(null);
+    setTokens([]);
+    setError(null);
   };
 
   return (
     <div className="container">
       <h1 className="title">Wallet Connection</h1>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">Error: {error}</p>}
 
       {wallet ? (
         <div className="wallet-info">
@@ -121,13 +170,19 @@ const App: React.FC = () => {
             <ul className="token-list">
               {tokens.map((token, index) => (
                 <li key={index}>
-                  {token.name} ({token.symbol}): {token.balance}
+                  <strong>{token.name}</strong> ({token.symbol}): {token.balance}
+                  <br />
+                  <strong>Price:</strong> ${token.price.toFixed(7)}
+                  <strong> | Total:</strong> ${token.total.toFixed(5)}
                 </li>
               ))}
             </ul>
           ) : (
-            <p>No tokens found.</p>
+            <p>Getting your tokens</p>
           )}
+          <button className="btn disconnect-btn" onClick={disconnectWallet}>
+            Disconnect Wallet
+          </button>
         </div>
       ) : (
         <button className="btn connect-btn" onClick={connectWallet}>

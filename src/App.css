@@ -1,80 +1,119 @@
-body {
-  margin: 0;
-  padding: 0;
-  font-family: Arial, sans-serif;
-  background: linear-gradient(135deg, #89f7fe, #66a6ff);
-  color: #333;
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .container {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background: white;
-  padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
-  width: 400px; /* Set a fixed width */
-  text-align: center; /* Ensures text is centered */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 600px;
+  padding: 20px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ffffff, #e8f5ff);
+  box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  font-family: Arial, sans-serif;
 }
 
+/* Title styles */
 .title {
-  font-size: 1.8rem;
-  color: #1d3557;
+  font-size: 2rem;
   margin-bottom: 20px;
-}
-
-p {
-  font-size: 1rem;
-  margin: 10px 0;
-}
-
-.error {
-  color: #e63946;
   font-weight: bold;
-  margin-bottom: 15px;
+  color: #333;
+}
+
+/* Wallet info styles */
+.wallet-info {
+  margin-top: 20px;
 }
 
 .wallet-info p {
   margin: 10px 0;
   font-size: 1rem;
-  color: #333;
+  color: #555;
 }
 
-.btn {
-  background: #457b9d;
-  color: white;
-  font-size: 1rem;
-  border: none;
-  padding: 10px 20px;
-  margin-top: 20px;
+.wallet-info strong {
+  font-weight: bold;
+}
+
+/* Token list styles */
+.token-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+
+.token-list li {
+  margin: 15px 0;
+  padding: 10px;
+  border: 1px solid #ddd;
   border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-  text-align: center;
+  background: #f9f9f9;
+  font-size: 0.9rem;
+  text-align: left;
+  color: #444;
 }
 
-.btn:focus {
-  outline: none;
+.token-list li strong {
+  margin-left: 5px;
+  color: #222;
+}
+
+/* Button styles */
+.btn {
+  display: inline-block;
+  margin: 10px 0;
+  background-color: #007bff;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn:hover {
+  background-color: #0056b3;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .connect-btn {
-  background: #4caf50;
+  background-color: #28a745;
 }
 
 .connect-btn:hover {
-  background: #388e3c;
+  background-color: #218838;
 }
 
 .disconnect-btn {
-  background: #e63946;
+  background-color: #dc3545;
 }
 
 .disconnect-btn:hover {
-  background: #b71c1c;
+  background-color: #c82333;
+}
+
+/* Error message styles */
+.error {
+  color: red;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .container {
+    max-width: 90%;
+    margin: 20px auto;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .btn {
+    font-size: 0.9rem;
+    padding: 8px 16px;
+  }
 }
