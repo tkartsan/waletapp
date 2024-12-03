@@ -24,14 +24,47 @@ interface TokenInfo {
 const App: React.FC = () => {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [loading, setLoading] = useState(false); // New loading state
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
 
   const fetchTokensAndPrices = async (address: string) => {
-    setLoading(true); // Set loading to true when fetching starts
+    setLoading(true);
     try {
+      // Fetch ETH balance
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const ethBalance = parseFloat(
+        ethers.formatEther(await provider.getBalance(address))
+      );
+
+      // Fetch ETH price from CoinGecko
+      const ethPriceResponse = await axios.get(
+        `https://api.coingecko.com/api/v3/simple/price`,
+        {
+          params: {
+            ids: "ethereum",
+            vs_currencies: "usd",
+          },
+        }
+      );
+
+      const ethPrice = ethPriceResponse.data.ethereum.usd || 0;
+      const ethTotal = ethBalance * ethPrice;
+
+      // Include ETH if total value exceeds threshold
+      const ethToken: TokenInfo | null =
+        ethTotal > 0.00002
+          ? {
+              name: "Ethereum",
+              symbol: "ETH",
+              balance: ethBalance.toFixed(4),
+              price: ethPrice,
+              total: ethTotal,
+            }
+          : null;
+
+      // Fetch other ERC20 tokens
       const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
         {
@@ -89,11 +122,17 @@ const App: React.FC = () => {
         (token) => token.total >= 0.00002
       );
 
-      setTokens(filteredTokensByTotal);
+      // Include ETH as the first token if it exists
+      if (ethToken) {
+        setTokens([ethToken, ...filteredTokensByTotal]);
+      } else {
+        setTokens(filteredTokensByTotal);
+      }
     } catch (err: any) {
+      console.error(err);
       setError("Failed to fetch tokens or prices.");
     } finally {
-      setLoading(false); // Set loading to false when fetching is complete
+      setLoading(false);
     }
   };
 
@@ -110,6 +149,9 @@ const App: React.FC = () => {
     }
 
     try {
+      setError(null);
+      setLoading(true);
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const balance = ethers.formatEther(await provider.getBalance(newAddress));
       const network = await provider.getNetwork();
@@ -121,9 +163,11 @@ const App: React.FC = () => {
       });
 
       fetchTokensAndPrices(newAddress);
-      setError(null);
     } catch (err: any) {
+      console.error(err);
       setError("Failed to fetch wallet info.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -138,6 +182,7 @@ const App: React.FC = () => {
       const accounts = await provider.send("eth_requestAccounts", []);
       fetchWalletInfo(accounts);
     } catch (err: any) {
+      console.error(err);
       setError("Failed to connect wallet.");
     }
   };
@@ -162,7 +207,7 @@ const App: React.FC = () => {
         window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
       }
     };
-  }, [wallet]); // Include `wallet` as a dependency to update on address change
+  }, [wallet]);
 
   return (
     <div className="container">
