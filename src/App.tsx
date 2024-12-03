@@ -27,32 +27,37 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
+  const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY; // Replace with your Moralis API Key
+  const cryptocompareApiKey = "YOUR_CRYPTOCOMPARE_API_KEY"; // Replace with your Cryptocompare API Key
 
   const fetchTokensAndPrices = async (address: string) => {
     setLoading(true);
     try {
-      // Fetch ETH balance
+      console.log("Fetching ETH balance...");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const ethBalance = parseFloat(
         ethers.formatEther(await provider.getBalance(address))
       );
 
-      // Fetch ETH price from CoinGecko
+      console.log("ETH Balance:", ethBalance);
+
+      // Fetch ETH price
       const ethPriceResponse = await axios.get(
-        `https://api.coingecko.com/api/v3/simple/price`,
+        `https://min-api.cryptocompare.com/data/price`,
         {
           params: {
-            ids: "ethereum",
-            vs_currencies: "usd",
+            fsym: "ETH",
+            tsyms: "USD",
+            api_key: cryptocompareApiKey,
           },
         }
       );
 
-      const ethPrice = ethPriceResponse.data.ethereum.usd || 0;
+      const ethPrice = ethPriceResponse.data.USD || 0;
       const ethTotal = ethBalance * ethPrice;
 
-      // Include ETH if total value exceeds threshold
+      console.log("ETH Price:", ethPrice, "ETH Total:", ethTotal);
+
       const ethToken: TokenInfo | null =
         ethTotal > 0.00002
           ? {
@@ -64,7 +69,7 @@ const App: React.FC = () => {
             }
           : null;
 
-      // Fetch other ERC20 tokens
+      console.log("Fetching ERC20 tokens...");
       const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
         {
@@ -81,55 +86,54 @@ const App: React.FC = () => {
           !token.name?.trim().startsWith("PT ")
       );
 
-      const tokensWithPrices = await Promise.all(
-        filteredTokens.map(async (token: any) => {
-          try {
-            const priceResponse = await axios.get(
-              `https://deep-index.moralis.io/api/v2/erc20/${token.token_address}/price`,
-              {
-                headers: {
-                  "X-API-Key": moralisApiKey,
-                },
-              }
-            );
+      const tokenPrices = filteredTokens.map(async (token: any) => {
+        const balance = parseFloat(token.balance) / 10 ** token.decimals;
 
-            const price = priceResponse.data.usdPrice || 0;
-            const balance = parseFloat(token.balance) / 10 ** token.decimals;
-            const total = balance * price;
+        try {
+          const priceResponse = await axios.get(
+            `https://deep-index.moralis.io/api/v2/erc20/${token.token_address}/price`,
+            {
+              headers: {
+                "X-API-Key": moralisApiKey,
+              },
+            }
+          );
 
-            return {
-              name: token.name || "Unknown",
-              symbol: token.symbol || "N/A",
-              balance: balance.toFixed(4),
-              price,
-              total,
-            };
-          } catch (priceError) {
-            return {
-              name: token.name || "Unknown",
-              symbol: token.symbol || "N/A",
-              balance: (
-                parseFloat(token.balance) / 10 ** token.decimals
-              ).toFixed(4),
-              price: 0,
-              total: 0,
-            };
-          }
-        })
-      );
+          const price = priceResponse.data.usdPrice || 0;
+          const total = balance * price;
+
+          return {
+            name: token.name || "Unknown",
+            symbol: token.symbol || "N/A",
+            balance: balance.toFixed(4),
+            price,
+            total,
+          };
+        } catch (err) {
+          console.error("Error Fetching Token Price:", token.symbol, err);
+          return {
+            name: token.name || "Unknown",
+            symbol: token.symbol || "N/A",
+            balance: balance.toFixed(4),
+            price: 0,
+            total: 0,
+          };
+        }
+      });
+
+      const tokensWithPrices = await Promise.all(tokenPrices);
 
       const filteredTokensByTotal = tokensWithPrices.filter(
         (token) => token.total >= 0.00002
       );
 
-      // Include ETH as the first token if it exists
       if (ethToken) {
         setTokens([ethToken, ...filteredTokensByTotal]);
       } else {
         setTokens(filteredTokensByTotal);
       }
     } catch (err: any) {
-      console.error(err);
+      console.error("Error Fetching Data:", err.response?.data || err.message);
       setError("Failed to fetch tokens or prices.");
     } finally {
       setLoading(false);
@@ -144,17 +148,15 @@ const App: React.FC = () => {
     }
 
     const newAddress = accounts[0];
-    if (wallet && wallet.address === newAddress) {
-      return; // Prevent refetching if the wallet address hasn't changed
-    }
-
     try {
-      setError(null);
-      setLoading(true);
-
+      console.log("Fetching wallet info...");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const balance = ethers.formatEther(await provider.getBalance(newAddress));
       const network = await provider.getNetwork();
+
+      console.log("Wallet Address:", newAddress);
+      console.log("Wallet Balance:", balance);
+      console.log("Network:", network.name);
 
       setWallet({
         address: newAddress,
@@ -164,10 +166,8 @@ const App: React.FC = () => {
 
       fetchTokensAndPrices(newAddress);
     } catch (err: any) {
-      console.error(err);
+      console.error("Error Fetching Wallet Info:", err.message);
       setError("Failed to fetch wallet info.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -178,11 +178,12 @@ const App: React.FC = () => {
     }
 
     try {
+      console.log("Connecting wallet...");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
       fetchWalletInfo(accounts);
     } catch (err: any) {
-      console.error(err);
+      console.error("Error Connecting Wallet:", err.message);
       setError("Failed to connect wallet.");
     }
   };
