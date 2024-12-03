@@ -21,27 +21,47 @@ interface TokenInfo {
   total: number;
 }
 
+// Custom plugin to draw a border for the pie chart
+const drawBorderPlugin = {
+  id: "drawBorderPlugin",
+  beforeDraw: (chart: any) => {
+    const { ctx, chartArea } = chart;
+    const { width, height, left, top } = chartArea;
+
+    ctx.save();
+    ctx.strokeStyle = "black"; // Border color
+    ctx.lineWidth = 1; // Border width
+
+    const centerX = left + width / 2;
+    const centerY = top + height / 2;
+    const radius = Math.min(width, height) / 2;
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+ChartJS.register(drawBorderPlugin);
+
 const App: React.FC = () => {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY; // Replace with your Moralis API Key
-  const cryptocompareApiKey = "YOUR_CRYPTOCOMPARE_API_KEY"; // Replace with your Cryptocompare API Key
+  const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
+  const cryptocompareApiKey = "YOUR_CRYPTOCOMPARE_API_KEY";
 
   const fetchTokensAndPrices = async (address: string) => {
     setLoading(true);
     try {
-      console.log("Fetching ETH balance...");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const ethBalance = parseFloat(
         ethers.formatEther(await provider.getBalance(address))
       );
 
-      console.log("ETH Balance:", ethBalance);
-
-      // Fetch ETH price
       const ethPriceResponse = await axios.get(
         `https://min-api.cryptocompare.com/data/price`,
         {
@@ -56,8 +76,6 @@ const App: React.FC = () => {
       const ethPrice = ethPriceResponse.data.USD || 0;
       const ethTotal = ethBalance * ethPrice;
 
-      console.log("ETH Price:", ethPrice, "ETH Total:", ethTotal);
-
       const ethToken: TokenInfo | null =
         ethTotal > 0.00002
           ? {
@@ -69,7 +87,6 @@ const App: React.FC = () => {
             }
           : null;
 
-      console.log("Fetching ERC20 tokens...");
       const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
         {
@@ -110,7 +127,6 @@ const App: React.FC = () => {
             total,
           };
         } catch (err) {
-          console.error("Error Fetching Token Price:", token.symbol, err);
           return {
             name: token.name || "Unknown",
             symbol: token.symbol || "N/A",
@@ -133,10 +149,24 @@ const App: React.FC = () => {
         setTokens(filteredTokensByTotal);
       }
     } catch (err: any) {
-      console.error("Error Fetching Data:", err.response?.data || err.message);
       setError("Failed to fetch tokens or prices.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      setError("MetaMask is not installed!");
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      fetchWalletInfo(accounts);
+    } catch (err: any) {
+      setError("Failed to connect wallet.");
     }
   };
 
@@ -149,14 +179,9 @@ const App: React.FC = () => {
 
     const newAddress = accounts[0];
     try {
-      console.log("Fetching wallet info...");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const balance = ethers.formatEther(await provider.getBalance(newAddress));
       const network = await provider.getNetwork();
-
-      console.log("Wallet Address:", newAddress);
-      console.log("Wallet Balance:", balance);
-      console.log("Network:", network.name);
 
       setWallet({
         address: newAddress,
@@ -166,25 +191,7 @@ const App: React.FC = () => {
 
       fetchTokensAndPrices(newAddress);
     } catch (err: any) {
-      console.error("Error Fetching Wallet Info:", err.message);
       setError("Failed to fetch wallet info.");
-    }
-  };
-
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      setError("MetaMask is not installed!");
-      return;
-    }
-
-    try {
-      console.log("Connecting wallet...");
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
-      fetchWalletInfo(accounts);
-    } catch (err: any) {
-      console.error("Error Connecting Wallet:", err.message);
-      setError("Failed to connect wallet.");
     }
   };
 
@@ -220,12 +227,7 @@ const App: React.FC = () => {
           <p>
             <strong>Wallet Address:</strong> {wallet.address}
           </p>
-          <p>
-            <strong>Balance:</strong> {wallet.balance} ETH
-          </p>
-
           <h2>Your Tokens:</h2>
-
           {loading ? (
             <p>Getting your tokens...</p>
           ) : tokens.length > 0 ? (
