@@ -219,7 +219,7 @@ const App: React.FC = () => {
 
   return (
     <div className="container">
-      <h1 className="title">Wallet Connection</h1>
+      <h1 className="title">Tokens Overview</h1>
       {error && <p className="error">Error: {error}</p>}
 
       {wallet ? (
