@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import "./App.css"; // Import CSS file
+import axios from "axios";
+import "./App.css";
 
 interface WalletInfo {
   address: string;
@@ -8,11 +9,57 @@ interface WalletInfo {
   chainName: string;
 }
 
+interface TokenInfo {
+  name: string;
+  symbol: string;
+  balance: string;
+}
+
 const App: React.FC = () => {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
+  const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Function to fetch wallet info
+  const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
+
+
+  console.log("Moralis API Key:", moralisApiKey);
+
+
+  // Fetch ERC-20 tokens using Moralis API
+  const fetchTokens = async (address: string) => {
+    if (!moralisApiKey) {
+      setError("Moralis API key is not set.");
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `https://deep-index.moralis.io/api/v2/${address}/erc20`,
+        {
+          headers: {
+            "X-API-Key": moralisApiKey,
+          },
+          params: {
+            chain: "eth", // Ethereum mainnet
+          },
+        }
+      );
+
+      const tokenData: TokenInfo[] = response.data.map((token: any) => ({
+        name: token.name || "Unknown",
+        symbol: token.symbol || "N/A",
+        balance: (parseFloat(token.balance) / 10 ** token.decimals).toFixed(4), // Adjust balance by decimals
+      }));
+
+      setTokens(tokenData);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch tokens");
+    }
+  };
+
+  // Fetch wallet info
   const fetchWalletInfo = async (accounts: string[]) => {
     if (accounts.length === 0) {
       setWallet(null);
@@ -22,16 +69,18 @@ const App: React.FC = () => {
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const account = accounts[0]; // Use the first account
-      const balance = ethers.formatEther(await provider.getBalance(account)); // Get balance
-      const network = await provider.getNetwork(); // Get network details
+      const account = accounts[0];
+      const balance = ethers.formatEther(await provider.getBalance(account));
+      const network = await provider.getNetwork();
 
       setWallet({
         address: account,
         balance,
         chainName: network.name || "Unknown Network",
       });
-      setError(null); // Clear any previous errors
+
+      fetchTokens(account); // Fetch tokens after wallet info
+      setError(null);
     } catch (err: any) {
       setError(err.message || "Failed to fetch wallet info");
     }
@@ -46,40 +95,11 @@ const App: React.FC = () => {
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []); // Request account access
-      fetchWalletInfo(accounts); // Fetch wallet info
+      const accounts = await provider.send("eth_requestAccounts", []);
+      fetchWalletInfo(accounts);
     } catch (err: any) {
       setError(err.message || "Failed to connect wallet");
     }
-  };
-
-  // Handle wallet/account changes
-  useEffect(() => {
-    if (!window.ethereum) return;
-
-    const handleAccountsChanged = (accounts: string[]) => {
-      fetchWalletInfo(accounts); // Update wallet info when account changes
-    };
-
-    const handleChainChanged = () => {
-      // Reload the page to update the network
-      window.location.reload();
-    };
-
-    // Listen for account changes and chain changes
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
-    window.ethereum.on("chainChanged", handleChainChanged);
-
-    // Cleanup listeners on component unmount
-    return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      window.ethereum.removeListener("chainChanged", handleChainChanged);
-    };
-  }, []);
-
-  // Disconnect the wallet
-  const disconnectWallet = () => {
-    setWallet(null); // Reset wallet state
   };
 
   return (
@@ -95,9 +115,19 @@ const App: React.FC = () => {
           <p>
             <strong>Balance:</strong> {wallet.balance} ETH
           </p>
-          <button className="btn disconnect-btn" onClick={disconnectWallet}>
-            Disconnect Wallet
-          </button>
+
+          <h2>Your Tokens:</h2>
+          {tokens.length > 0 ? (
+            <ul className="token-list">
+              {tokens.map((token, index) => (
+                <li key={index}>
+                  {token.name} ({token.symbol}): {token.balance}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No tokens found.</p>
+          )}
         </div>
       ) : (
         <button className="btn connect-btn" onClick={connectWallet}>
