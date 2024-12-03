@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import axios from "axios";
 import { Pie } from "react-chartjs-2";
@@ -24,11 +24,13 @@ interface TokenInfo {
 const App: React.FC = () => {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const [loading, setLoading] = useState(false); // New loading state
   const [error, setError] = useState<string | null>(null);
 
   const moralisApiKey = import.meta.env.VITE_MORALIS_API_KEY;
 
   const fetchTokensAndPrices = async (address: string) => {
+    setLoading(true); // Set loading to true when fetching starts
     try {
       const tokenBalancesResponse = await axios.get(
         `https://deep-index.moralis.io/api/v2/${address}/erc20`,
@@ -36,9 +38,7 @@ const App: React.FC = () => {
           headers: {
             "X-API-Key": moralisApiKey,
           },
-          params: {
-            chain: "eth",
-          },
+          params: { chain: "eth" },
         }
       );
 
@@ -90,9 +90,10 @@ const App: React.FC = () => {
       );
 
       setTokens(filteredTokensByTotal);
-      setError(null);
     } catch (err: any) {
       setError("Failed to fetch tokens or prices.");
+    } finally {
+      setLoading(false); // Set loading to false when fetching is complete
     }
   };
 
@@ -103,19 +104,23 @@ const App: React.FC = () => {
       return;
     }
 
+    const newAddress = accounts[0];
+    if (wallet && wallet.address === newAddress) {
+      return; // Prevent refetching if the wallet address hasn't changed
+    }
+
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const account = accounts[0];
-      const balance = ethers.formatEther(await provider.getBalance(account));
+      const balance = ethers.formatEther(await provider.getBalance(newAddress));
       const network = await provider.getNetwork();
 
       setWallet({
-        address: account,
+        address: newAddress,
         balance,
         chainName: network.name || "Unknown Network",
       });
 
-      fetchTokensAndPrices(account);
+      fetchTokensAndPrices(newAddress);
       setError(null);
     } catch (err: any) {
       setError("Failed to fetch wallet info.");
@@ -143,42 +148,21 @@ const App: React.FC = () => {
     setError(null);
   };
 
-  const generateChartData = () => {
-    const labels = tokens.map((token) => token.symbol);
-    const data = tokens.map((token) => token.total);
-    const colors = tokens.map(
-      () =>
-        `hsl(${Math.floor(Math.random() * 360)}, 80%, 70%)`
-    );
-
-    return {
-      labels,
-      datasets: [
-        {
-          data,
-          backgroundColor: colors,
-          borderColor: "black",
-          borderWidth: 1,
-        },
-      ],
+  useEffect(() => {
+    const handleAccountsChanged = (accounts: string[]) => {
+      fetchWalletInfo(accounts);
     };
-  };
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      tooltip: {
-        callbacks: {
-          label: (context: any) =>
-            `$${context.raw.toFixed(2)}`,
-        },
-      },
-      legend: {
-        position: "bottom",
-      },
-    },
-  };
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, [wallet]); // Include `wallet` as a dependency to update on address change
 
   return (
     <div className="container">
@@ -196,10 +180,40 @@ const App: React.FC = () => {
 
           <h2>Your Tokens:</h2>
 
-          {tokens.length > 0 ? (
+          {loading ? (
+            <p>Getting your tokens...</p>
+          ) : tokens.length > 0 ? (
             <>
               <div className="chart-container">
-                <Pie data={generateChartData()} options={chartOptions} />
+                <Pie
+                  data={{
+                    labels: tokens.map((token) => token.symbol),
+                    datasets: [
+                      {
+                        data: tokens.map((token) => token.total),
+                        backgroundColor: tokens.map(
+                          () =>
+                            `hsl(${Math.floor(Math.random() * 360)}, 80%, 70%)`
+                        ),
+                        borderColor: "black",
+                        borderWidth: 1,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      tooltip: {
+                        callbacks: {
+                          label: (context: any) =>
+                            `$${context.raw.toFixed(2)}`,
+                        },
+                      },
+                      legend: { position: "bottom" },
+                    },
+                  }}
+                />
               </div>
               <ul className="token-list">
                 {tokens.map((token, index) => (
@@ -214,7 +228,7 @@ const App: React.FC = () => {
               </ul>
             </>
           ) : (
-            <p>Getting your tokens...</p>
+            <p>No tokens available.</p>
           )}
           <button className="btn disconnect-btn" onClick={disconnectWallet}>
             Disconnect Wallet
